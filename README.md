@@ -2,7 +2,40 @@
 
 ## How to Run
 
-### 使用 Docker Compose 运行（推荐）
+### 方式一：本地 Python 运行
+
+```bash
+# 1. 进入后端目录并安装依赖
+cd backend
+pip install -r requirements.txt
+
+# 2. 直接运行PPO训练（命令行模式，默认500回合）
+python ppo.py
+
+# 3. 或启动API服务
+python app.py
+# 服务启动后访问 http://localhost:5001/
+```
+
+**本地API服务测试：**
+
+```bash
+# 健康检查
+curl http://localhost:5001/health
+
+# 开始训练（50回合快速测试）
+curl -X POST http://localhost:5001/train \
+  -H "Content-Type: application/json" \
+  -d '{"max_episodes": 50}'
+
+# 查看训练状态
+curl http://localhost:5001/status
+
+# 获取训练结果
+curl http://localhost:5001/results
+```
+
+### 方式二：使用 Docker Compose 运行（推荐）
 
 ```bash
 # 构建并启动服务
@@ -18,40 +51,34 @@ docker-compose logs -f backend
 docker-compose down
 ```
 
-### 验证服务运行
-
-服务启动后，访问以下地址：
-
-- API首页: http://localhost:8081/
-- 健康检查: http://localhost:8081/health
-- 查看状态: http://localhost:8081/status
-
-### 开始训练
+**Docker模式API测试：**
 
 ```bash
-# 使用默认参数开始训练（300回合）
+# 健康检查
+curl http://localhost:8081/health
+
+# 开始训练（默认300回合）
 curl -X POST http://localhost:8081/train
 
 # 自定义训练回合数
 curl -X POST http://localhost:8081/train \
   -H "Content-Type: application/json" \
   -d '{"max_episodes": 500}'
-```
 
-### 查看训练结果
+# 查看训练状态
+curl http://localhost:8081/status
 
-```bash
 # 获取训练结果JSON
 curl http://localhost:8081/results
 
-# 获取训练曲线图
+# 下载训练曲线图
 curl http://localhost:8081/plot --output training_plot.png
 ```
 
 ### 验证镜像跨平台支持
 
 ```bash
-# 验证ARM架构支持（Apple Silicon）
+# 验证ARM架构支持（Apple Silicon Mac）
 docker pull --platform linux/arm64 python:3.11-slim
 
 # 验证X86架构支持
@@ -62,9 +89,9 @@ docker pull --platform linux/amd64 python:3.11-slim
 
 ## Services
 
-| 服务名 | 端口 | 描述 |
-|--------|------|------|
-| backend | 8081 | PPO强化学习算法API服务 |
+| 服务名 | 端口（Docker） | 端口（本地） | 描述 |
+|--------|---------------|-------------|------|
+| backend | 8081 | 5001 | PPO强化学习算法API服务 |
 
 ### API接口说明
 
@@ -73,7 +100,7 @@ docker pull --platform linux/amd64 python:3.11-slim
 | `/` | GET | API说明和接口列表 |
 | `/health` | GET | 健康检查 |
 | `/status` | GET | 查看当前训练状态 |
-| `/train` | POST | 开始训练（支持参数: max_episodes） |
+| `/train` | POST | 开始训练（支持参数: max_episodes，默认300，最大10000） |
 | `/results` | GET | 获取训练结果JSON |
 | `/plot` | GET | 获取训练曲线图PNG |
 
@@ -142,10 +169,10 @@ L^CLIP(θ) = E[min(r(θ)A, clip(r(θ), 1-ε, 1+ε)A)]
 ```
 .
 ├── backend/                 # 后端服务
-│   ├── Dockerfile          # Docker构建文件
+│   ├── Dockerfile          # Docker构建文件（支持ARM和X86跨平台）
 │   ├── requirements.txt    # Python依赖
-│   ├── app.py              # Flask API服务
-│   └── ppo.py              # PPO算法实现
+│   ├── app.py              # Flask API服务（含结构化日志和错误处理）
+│   └── ppo.py              # PPO算法核心实现
 ├── docker-compose.yml      # Docker Compose配置
 ├── .gitignore              # Git忽略文件
 └── README.md               # 项目说明
@@ -155,7 +182,14 @@ L^CLIP(θ) = E[min(r(θ)A, clip(r(θ), 1-ε, 1+ε)A)]
 
 训练约200-300回合后，智能体应该能够稳定地平衡杆子，达到接近500的最大奖励。
 
-### 参考文献
+### 日志输出示例
 
-- [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347) - OpenAI, 2017
-- [High-Dimensional Continuous Control Using Generalized Advantage Estimation](https://arxiv.org/abs/1506.02438) - GAE论文
+```
+2026-02-12 23:09:39 - ppo - INFO - 开始PPO训练
+2026-02-12 23:09:39 - ppo - INFO - 环境创建成功: CartPole-v1
+2026-02-12 23:09:39 - ppo - INFO - 状态空间维度: 4
+2026-02-12 23:09:39 - ppo - INFO - 动作空间维度: 2
+2026-02-12 23:09:40 - ppo - INFO - 回合   10 | 奖励:   19.0 | 平均奖励(100):   18.8 | 总步数: 188
+...
+2026-02-12 23:09:40 - ppo - INFO - 训练完成! 总回合: 50, 最终平均奖励: 19.4
+```

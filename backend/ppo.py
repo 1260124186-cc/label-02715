@@ -21,7 +21,26 @@ matplotlib.use('Agg')  # 使用非GUI后端
 import matplotlib.pyplot as plt
 import os
 import json
+import logging
 from datetime import datetime
+
+# ==================== 日志配置 ====================
+
+def get_logger(name='ppo'):
+    """获取日志器"""
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    return logger
+
+logger = get_logger('ppo')
 
 
 # ==================== 神经网络模型 ====================
@@ -329,18 +348,25 @@ def train_ppo(
         print_interval: 打印间隔
         output_dir: 输出目录
     """
+    logger.info("=" * 50)
+    logger.info("开始PPO训练")
+    logger.info("=" * 50)
+    
     # 确保输出目录存在
     os.makedirs(output_dir, exist_ok=True)
+    logger.info(f"输出目录: {output_dir}")
     
     # 创建环境
-    env = gym.make(env_name)
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
-    
-    print(f"环境: {env_name}")
-    print(f"状态空间维度: {state_dim}")
-    print(f"动作空间维度: {action_dim}")
-    print("-" * 50)
+    try:
+        env = gym.make(env_name)
+        state_dim = env.observation_space.shape[0]
+        action_dim = env.action_space.n
+        logger.info(f"环境创建成功: {env_name}")
+        logger.info(f"状态空间维度: {state_dim}")
+        logger.info(f"动作空间维度: {action_dim}")
+    except Exception as e:
+        logger.error(f"环境创建失败: {env_name}, 错误: {str(e)}")
+        raise
     
     # 创建PPO智能体
     agent = PPO(
@@ -399,18 +425,19 @@ def train_ppo(
         
         # 打印训练信息
         if (episode + 1) % print_interval == 0:
-            print(f"回合 {episode + 1:4d} | "
-                  f"奖励: {episode_reward:6.1f} | "
-                  f"平均奖励(100): {avg_reward:6.1f} | "
-                  f"总步数: {total_steps}")
+            logger.info(f"回合 {episode + 1:4d} | "
+                       f"奖励: {episode_reward:6.1f} | "
+                       f"平均奖励(100): {avg_reward:6.1f} | "
+                       f"总步数: {total_steps}")
         
         # 检查是否解决
         if avg_reward >= 475 and not solved:
-            print(f"\n环境已解决! 回合 {episode + 1}, 平均奖励: {avg_reward:.1f}")
+            logger.info(f"环境已解决! 回合 {episode + 1}, 平均奖励: {avg_reward:.1f}")
             solved = True
             solved_episode = episode + 1
     
     env.close()
+    logger.info("训练环境已关闭")
     
     # 保存训练结果
     results = {
@@ -426,11 +453,24 @@ def train_ppo(
     
     # 保存JSON结果
     results_path = os.path.join(output_dir, 'training_results.json')
-    with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+    try:
+        with open(results_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        logger.info(f"训练结果已保存到: {results_path}")
+    except IOError as e:
+        logger.error(f"保存训练结果失败: {str(e)}")
+        raise
     
     # 绘制并保存训练曲线
-    plot_path = plot_training_results(episode_rewards, avg_rewards, output_dir)
+    try:
+        plot_path = plot_training_results(episode_rewards, avg_rewards, output_dir)
+        logger.info(f"训练曲线图已保存到: {plot_path}")
+    except Exception as e:
+        logger.error(f"保存训练曲线图失败: {str(e)}")
+    
+    logger.info("=" * 50)
+    logger.info(f"训练完成! 总回合: {len(episode_rewards)}, 最终平均奖励: {results['final_avg_reward']:.1f}")
+    logger.info("=" * 50)
     
     return agent, episode_rewards, avg_rewards, results
 
@@ -439,6 +479,8 @@ def plot_training_results(episode_rewards, avg_rewards, output_dir='/app/output'
     """
     绘制训练结果
     """
+    logger.debug("开始绘制训练曲线图...")
+    
     plt.figure(figsize=(12, 5))
     
     # 绘制每回合奖励
@@ -467,32 +509,41 @@ def plot_training_results(episode_rewards, avg_rewards, output_dir='/app/output'
     plt.savefig(plot_path, dpi=150)
     plt.close()
     
-    print(f"\n训练结果已保存到 {plot_path}")
     return plot_path
 
 
 # ==================== 主程序 ====================
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("PPO (Proximal Policy Optimization) 强化学习算法")
-    print("=" * 50)
-    print()
+    logger.info("=" * 50)
+    logger.info("PPO (Proximal Policy Optimization) 强化学习算法")
+    logger.info("=" * 50)
     
     # 设置随机种子
     torch.manual_seed(42)
     np.random.seed(42)
+    logger.info("随机种子已设置: 42")
     
-    # 训练智能体
-    agent, episode_rewards, avg_rewards, results = train_ppo(
-        env_name='CartPole-v1',
-        max_episodes=500,
-        max_steps=500,
-        update_interval=2048,
-        print_interval=10,
-        output_dir='/app/output'
-    )
+    # 确定输出目录：优先使用环境变量，否则使用当前目录下的output文件夹
+    output_dir = os.environ.get('OUTPUT_DIR', './output')
     
-    print("\n训练完成!")
-    print(f"最终平均奖励: {results['final_avg_reward']:.1f}")
-    print(f"是否解决: {results['solved']}")
+    try:
+        # 训练智能体
+        agent, episode_rewards, avg_rewards, results = train_ppo(
+            env_name='CartPole-v1',
+            max_episodes=500,
+            max_steps=500,
+            update_interval=2048,
+            print_interval=10,
+            output_dir=output_dir
+        )
+        
+        logger.info("训练完成!")
+        logger.info(f"最终平均奖励: {results['final_avg_reward']:.1f}")
+        logger.info(f"是否解决: {results['solved']}")
+        
+    except KeyboardInterrupt:
+        logger.warning("训练被用户中断")
+    except Exception as e:
+        logger.error(f"训练过程发生错误: {str(e)}")
+        raise
