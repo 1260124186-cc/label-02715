@@ -129,6 +129,17 @@ def method_not_allowed(error):
     }), 405
 
 
+@app.errorhandler(415)
+def unsupported_media_type(error):
+    """处理415错误 - 不支持的媒体类型"""
+    logger.warning(f"415错误: Content-Type={request.content_type}")
+    return jsonify({
+        'success': False,
+        'error': 'unsupported_media_type',
+        'message': '不支持的Content-Type，请使用application/json或不设置Content-Type'
+    }), 415
+
+
 # ==================== API路由 ====================
 
 @app.route('/')
@@ -187,8 +198,13 @@ def train():
             'message': '训练正在进行中，请等待完成'
         }), 400
     
-    # 获取并验证训练参数
-    data = request.get_json() or {}
+    # 获取并验证训练参数（兼容无Content-Type的请求）
+    data = {}
+    try:
+        # 使用 force=True 和 silent=True 强制解析JSON，忽略Content-Type
+        data = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        data = {}
     max_episodes = data.get('max_episodes', 300)
     
     # 参数验证
