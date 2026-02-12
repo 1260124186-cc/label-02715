@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # PPO强化学习后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ppo-backend
+    ports:
+      - "8081:5000"
+    volumes:
+      - ppo-output:/app/output
+    environment:
+      - OUTPUT_DIR=/app/output
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ppo-output:
+    driver: local
