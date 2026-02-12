@@ -63,7 +63,7 @@ curl -X POST http://localhost:8081/train
 # 自定义训练回合数
 curl -X POST http://localhost:8081/train \
   -H "Content-Type: application/json" \
-  -d '{"max_episodes": 500}'
+  -d '{"max_episodes": 300}'
 
 # 查看训练状态
 curl http://localhost:8081/status
